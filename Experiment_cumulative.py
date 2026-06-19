@@ -5,7 +5,8 @@ import numpy as np
 from collections import deque
 import heapq
 
-import Policy_SRPT, Policy_SWAG, Policy_GEODIS, Policy_Heuristic, Policy_MinFlow
+import SWAG_slot, Heuristic, LP,  LP_SWAG, LP_flowtest2, LP_flow_improve, LP_flowtest, SRPT, LP_flow, LP_flow_t
+import GEODIS, LP_flow_simp, LP_flow_simp_2
 from Job import Job, Job_Total
 from Event import Event, Event_Transmission, Transmission_queue
 #use_solver = "HIGHS"
@@ -13,11 +14,11 @@ from Event import Event, Event_Transmission, Transmission_queue
 
 def main():
     data_resources = ["Ali2018_4"]  # Ali2017:5000 Ali2018_4: 15000
-    strategies = ["FLOW"]  #"SRPT", "SWAG", "heuristic", "GEODIS", "FLOW"
-    alphas = [1.0] #0.0, 0.5, 1.0, 2.0
-    utilities = [0.6] #0.5, 0.6, 0.7, 0.8
-    bandwidths = [3]#3, 6, 12
-    job_number = 1000
+    strategies = ["GEODIS"]  # "LP_flow", "LP_simp","LP_simp2", "SRPT", "SWAG", "heuristic", "GEODIS"
+    alphas = [1.0]
+    utilities = [0.6]
+    bandwidths = [6]#3,6,12
+    job_number = 10000
     start_index = 15000
 
     # Define the number of sites and site capacity
@@ -52,9 +53,9 @@ def main():
                         # print(forecast_threshold, int((total_job_queue[-1].arrival_time - total_job_queue[0].arrival_time)*threshold_ratio/job_number))
                         # forecast_threshold = int((total_job_queue[-1].arrival_time - total_job_queue[0].arrival_time)*threshold_ratio/job_number)
                         # print(f"Forecast threshold = {forecast_threshold}, ratio = {threshold_ratio}")
-                        total_process_list = []
+                        total_wait_list = []
                         event_heapq_list = [[] for _ in range(num_of_sites)]  # Event queues for each site
-                        process_list = [[] for _ in range(num_of_sites)]  # Wait lists for each site
+                        wait_list = [[] for _ in range(num_of_sites)]  # Wait lists for each site
                         transmission_list = [Transmission_queue() for _ in
                                              range(num_of_sites)]  # Transmission queues for each site
                         # Record when will the bandwidth be available
@@ -83,7 +84,7 @@ def main():
                         max_queue_length = 0
                         # finish_count = 0
 
-                        while total_job_queue or total_process_list:
+                        while total_job_queue or total_wait_list:
                             # Find the earliest event & arriving job to decide which happen first.
                             # Consider the empty case: set time to be MAX so that the other will happen earlier.
                             earliest_event = find_earliest_event(event_heapq_list)
@@ -94,18 +95,18 @@ def main():
                                 # Job arrival first
                                 current_time = next_job_arrival_time
                                 cur_length = sum([transmission_list[i].length() for i in range(num_of_sites)])
-                                release_transmission(total_process_list, process_list, transmission_list, current_time)
+                                release_transmission(total_wait_list, wait_list, transmission_list, current_time)
                                 num_trans += (cur_length -
                                               sum([transmission_list[i].length() for i in range(num_of_sites)]))
                                 # finish_count = 0
                                 while total_job_queue and total_job_queue[0].arrival_time == next_job_arrival_time:
                                     current_job = total_job_queue.pop(0)  # Remove and return the first job
-                                    add_job(current_job, total_process_list, process_list)
+                                    add_job(current_job, total_wait_list, wait_list)
                                     print(
                                         f"Job{current_job.Job_ID} with {current_job.num_task} task(s),"
                                         f" arrives at {current_job.arrival_time:.2f},"
-                                        f" now {len(total_process_list)} job(s).")
-                                    max_queue_length = max(max_queue_length, len(total_process_list))
+                                        f" now {len(total_wait_list)} job(s).")
+                                    max_queue_length = max(max_queue_length, len(total_wait_list))
                                     if current_job.num_task == 1:
                                         # for j in range(len(ideal_order)):
                                         #     ideal_order[j] += 1
@@ -123,7 +124,7 @@ def main():
                                 # print(f"Found the earliest event: {earliest_event.Job_ID}")
                                 current_time = earliest_event.release_time
                                 cur_length = sum([transmission_list[i].length() for i in range(num_of_sites)])
-                                release_transmission(total_process_list, process_list, transmission_list, current_time)
+                                release_transmission(total_wait_list, wait_list, transmission_list, current_time)
                                 num_trans += (cur_length -
                                               sum([transmission_list[i].length() for i in range(num_of_sites)]))
                                 # if current_time - last_compute_time >= forecast_threshold:
@@ -132,19 +133,19 @@ def main():
                                 for i in range(num_of_sites):
                                     while event_heapq_list[i] and event_heapq_list[i][0].release_time == current_time:
                                         current_event = heapq.heappop(event_heapq_list[i])  # Peek at the earliest event
-                                        job_index = find_aggregate_job_index(total_process_list,
+                                        job_index = find_aggregate_job_index(total_wait_list,
                                                                              current_event.Job_ID)
-                                        total_process_list[job_index].num_finished_task += 1
-                                        process_list[i][job_index].num_performing_task -= 1
-                                        if total_process_list[job_index].num_finished_task >= total_process_list[
+                                        total_wait_list[job_index].num_finished_task += 1
+                                        wait_list[i][job_index].num_performing_task -= 1
+                                        if total_wait_list[job_index].num_finished_task >= total_wait_list[
                                             job_index].num_task:
                                             # A job completes, remove it
                                             # finish_count += 1
                                             print(
-                                                f"Job{current_event.Job_ID} with {total_process_list[job_index].num_finished_task} task(s) "
+                                                f"Job{current_event.Job_ID} with {total_wait_list[job_index].num_finished_task} task(s) "
                                                 f"finishes at {current_time:.2f} "
-                                                f"Now {max(len(total_process_list) - 1, 0)} job(s) remaining.")
-                                            remove_total_job(total_process_list, process_list, finish_list,
+                                                f"Now {max(len(total_wait_list) - 1, 0)} job(s) remaining.")
+                                            remove_total_job(total_wait_list, wait_list, finish_list,
                                                              job_index, current_time)
                                             # recompute = True
                                             # print(f"Order before: {ideal_order}")
@@ -164,41 +165,44 @@ def main():
                                             # print(f"Order at now: {ideal_order}")
                             else:
                                 # A transmission arrives first
+                                # print(f"Found the earliest transmission")
                                 current_time = find_earliest_transmission(transmission_list)
                                 # current_time = event.release_time
                                 cur_length = sum([transmission_list[i].length() for i in range(num_of_sites)])
-                                release_transmission(total_process_list, process_list, transmission_list, current_time)
+                                release_transmission(total_wait_list, wait_list, transmission_list, current_time)
                                 num_trans += (cur_length -
                                               sum([transmission_list[i].length() for i in range(num_of_sites)]))
-                                # sub_job = find_job(process_list[i], current_event.Job_ID)
+                                # sub_job = find_job(wait_list[i], current_event.Job_ID)
                                 # sub_job.num_performing_task -= 1
                                 # if sub_job.num_performing_task == 0 and sub_job.num_waiting_task == 0:
                                 #     recompute = True
                             if recompute:
-                                # current_demand, current_duration, current_datasize = record_info(num_of_sites, process_list)
+                                # current_demand, current_duration, current_datasize = record_info(num_of_sites, wait_list)
                                 computation_count += 1
-                                computation_start_time = time.time()
                                 # Clear transmission link
-                                retract_transmission(process_list, transmission_list)
-                                # current_workload = [[0 for _ in range(i)] for i in capacity]
-                                # for i in range(num_of_sites):
-                                #     temp_index = 0
-                                #     for event in event_heapq_list[i]:
-                                #         current_workload[i][temp_index] = event.release_time - current_time
-                                #         temp_index += 1
-                                # total_job_in_computation += len(total_process_list)
-                                ideal_order, transmission_list, time_cost = compute_order(strategy, total_process_list, process_list,
-                                                                               capacity, bandwidth,
-                                                                               transmission_list, current_time, forecast_threshold)#, current_workload
-                                sum_computation_time_queue.append(time_cost)
+                                # retract_transmission(wait_list, transmission_list)
+                                release_transmission(total_wait_list, wait_list, transmission_list, current_time)
+                                # Keep current order & transmission, estimate workload
+                                # current_workload = estimate_workload(wait_list, transmission_list, ideal_order, capacity)
+                                # Compute order & transmission for new jobs:
+                                # print(f"ideal_order: {ideal_order}")
+                                computation_start_time = time.time()
+                                ideal_order, transmission_list = update_order(strategy, total_wait_list, wait_list,
+                                                                               ideal_order, capacity, bandwidth,
+                                                                               transmission_list, current_time)
+
+                                # ideal_order, transmission_list = compute_order(strategy, total_wait_list, wait_list,
+                                #                                                capacity, bandwidth,
+                                #                                                transmission_list, current_time, forecast_threshold)#, current_workload
+                                sum_computation_time_queue.append(time.time() - computation_start_time)
                             # print(ideal_order)
-                            # print(process_list)
+                            # print(wait_list)
 
 
                             for i in range(num_of_sites):
-                                while process_list[i] and len(event_heapq_list[i]) < capacity[i]:
+                                while wait_list[i] and len(event_heapq_list[i]) < capacity[i]:
                                     for j in ideal_order:
-                                        hungry_job = process_list[i][j]
+                                        hungry_job = wait_list[i][j]
                                         while hungry_job.num_waiting_task > 0 and len(event_heapq_list[i]) < capacity[
                                             i]:
                                             # Decrease waiting tasks and increase performing tasks
@@ -213,10 +217,11 @@ def main():
                                             # new_event.enter_time = current_time
                                             # new_event.release_time = new_event.enter_time + task_duration
                                             heapq.heappush(event_heapq_list[i], new_event)
-                                    if len(event_heapq_list[i]) == capacity[i] or process_list[i][-1].num_waiting_task == 0:
+                                            # print(f"Add an event")
+                                    if len(event_heapq_list[i]) == capacity[i] or wait_list[i][-1].num_waiting_task == 0:
                                         break
-
-                                    # hungry_job = find_hungry_job(process_list[i], ideal_allocation[i])
+                                    # print(f"Site {i} continue processing")
+                                    # hungry_job = find_hungry_job(wait_list[i], ideal_allocation[i])
 
                                     # if hungry_job.num_waiting_task > 0:
                                     #     # Decrease waiting tasks and increase performing tasks
@@ -234,7 +239,7 @@ def main():
                                     # else:
                                     #     break
 
-                        #     aggregate_allocation = record_aggregate_allocation(num_of_sites, process_list)
+                        #     aggregate_allocation = record_aggregate_allocation(num_of_sites, wait_list)
                         #     SD = compute_SD(aggregate_allocation)
 
                         #     if not SD_stack:  # equivalent of `isEmpty()` in Java
@@ -280,7 +285,6 @@ def main():
                                                bandwidth,
                                                utility, job_number, start_index, site_capacity)
                         # write_computation_time()
-                        computation_count = 0
                         if strategy.startswith("D"):
                             break
     # print(f"num_late {num_late}")
@@ -294,8 +298,6 @@ def compute_order(strategy, total_wait_list, wait_list, capacity, bandwidth, tra
     current_duration = [total_wait_list[i].total_duration / total_wait_list[i].num_task for i in range(num_of_jobs)]
     current_datasize = [total_wait_list[i].data_size for i in range(num_of_jobs)]
     current_workload = [[0 for _ in range(i)] for i in capacity]
-    job_transit = []
-    order = []
     # global num_late
 
     # for i in range(num_of_sites)
@@ -305,31 +307,124 @@ def compute_order(strategy, total_wait_list, wait_list, capacity, bandwidth, tra
         for index, temp_job in enumerate(wait_list[i]):
             current_demand[i][index] = temp_job.num_waiting_task
     # print(current_demand)
-    start_time = time.perf_counter()
     if strategy == "SWAG":
-        order = Policy_SWAG.SWAG_slot(current_demand, current_duration, capacity)
+        return SWAG_slot.SWAG_slot(current_demand, current_duration, capacity), transmission_list
     elif strategy == "SRPT":
-        order = Policy_SRPT.SRPT(current_demand, current_duration, capacity)
-    elif strategy == "FCFS":
-        order = [i for i in range(len(current_demand[0]))]
-    elif strategy == "FLOW":
-        order, job_transit= Policy_MinFlow.max_flow_ortools(current_demand, current_duration, current_datasize, capacity,
+        return SRPT.SRPT(current_demand, current_duration, capacity), transmission_list
+    elif strategy == "LP_flow":
+        LP_order, job_transit, cur_late = LP_flow.max_flow_ortools(current_demand, current_duration, current_datasize, capacity,
                                                bandwidth)  # , forecast_threshold
+        # num_late += cur_late
+        transmission_list = transfer_transit(LP_order, job_transit, wait_list, current_datasize, bandwidth,
+                                             current_time)
+        return LP_order, transmission_list
     elif strategy == "heuristic":
-        order, job_transit = Policy_Heuristic.heuristic(current_demand, current_duration, current_datasize, capacity, bandwidth)
+        greedy_order, job_transit = Heuristic.heuristic(current_demand, current_duration, current_datasize, capacity, bandwidth)
+        transmission_list = transfer_transit(greedy_order, job_transit, wait_list, current_datasize, bandwidth,
+                                             current_time)
+        return greedy_order, transmission_list
     elif strategy == "GEODIS":
-        order, job_transit = Policy_GEODIS.GEODIS(current_demand, current_duration, current_datasize,
+        GEO_order, job_transit = GEODIS.GEODIS(current_demand, current_duration, current_datasize,
                                                                      capacity,
                                                                      bandwidth)
+        transmission_list = transfer_transit(GEO_order, job_transit, wait_list, current_datasize, bandwidth,
+                                             current_time)
+        return GEO_order, transmission_list
+    elif strategy == "LP_simp":
+        GEO_order, job_transit, cur_late = LP_flow_simp.max_flow_ortools(current_demand, current_duration, current_datasize,
+                                                                     capacity,
+                                                                     bandwidth)
+        transmission_list = transfer_transit(GEO_order, job_transit, wait_list, current_datasize, bandwidth,
+                                             current_time)
+        return GEO_order, transmission_list
+    elif strategy == "LP_simp2":
+        GEO_order, job_transit, cur_late = LP_flow_simp_2.max_flow_ortools(current_demand, current_duration, current_datasize,
+                                                                     capacity,
+                                                                     bandwidth)
+        transmission_list = transfer_transit(GEO_order, job_transit, wait_list, current_datasize, bandwidth,
+                                             current_time)
+        return GEO_order, transmission_list
     else:
         print("Unknown Strategy. Take default as FCFS")
-        order = [i for i in range(len(current_demand[0]))]
-    duration = time.perf_counter() - start_time
-    # num_late += cur_late
-    if job_transit:
-        transmission_list = transfer_transit(order, job_transit, wait_list, current_datasize, bandwidth,
+        return [i for i in range(len(current_demand[0]))], transmission_list
+
+
+def update_order(strategy, total_wait_list, wait_list, ideal_order, capacity, bandwidth, transmission_list, current_time):
+    num_site = len(capacity)
+    num_job = len(total_wait_list)
+    cur_demand = [[0 for _ in range(num_job)] for _ in range(num_site)]
+    cur_duration = [total_wait_list[i].total_duration / total_wait_list[i].num_task for i in range(num_job)]
+    cur_datasize = [total_wait_list[i].data_size for i in range(num_job)]
+    cur_workload = [0 for _ in range(num_site)]
+    # global num_late
+
+    # Add local & transmitted tasks
+    # Assumption as GEODIS:  all tasks arrive in time 
+    for i in range(num_site):
+        # Record local tasks
+        for index, temp_job in enumerate(wait_list[i]):
+            cur_demand[i][index] = temp_job.num_waiting_task
+        # Add transferred tasks
+        for event in transmission_list[i].queue:
+            cur_demand[i][event.job_index] += 1
+        # Compute local workload
+        # cur_demand also records new jobs
+        # But we only add jobs in the order as workload
+        for cur_job in ideal_order:
+            cur_workload[i] += cur_duration[cur_job] * cur_demand[i][cur_job] / capacity[i]
+    
+    # print(current_demand)
+    if strategy == "GEODIS":
+        GEO_order, job_transit = GEODIS.GEODIS_cumu(cur_workload, ideal_order, cur_demand, cur_duration, cur_datasize,
+                                                                     capacity,
+                                                                     bandwidth)
+        # print(f"Order updated: {GEO_order}")
+        update_transit(transmission_list, ideal_order, GEO_order, job_transit, wait_list, cur_datasize, bandwidth,
                                              current_time)
-    return order, transmission_list, duration
+        # transmission_list = transfer_transit(GEO_order, job_transit, wait_list, cur_datasize, bandwidth,
+        #                                      current_time)
+        # print(f"transmission updated {transmission_list}")
+        return GEO_order, transmission_list
+    else:
+        print("Unknown Strategy. Take default as FCFS")
+        return [i for i in range(len(cur_demand[0]))], transmission_list
+
+def update_transit(transmission_list, ideal_order, job_order, job_transmission, wait_list, job_datasize, bandwidth, current_time):
+    num_jobs = len(job_order)
+    num_sites = len(wait_list)
+    scheduled_length = len(ideal_order)
+    transmission_cost = [[0 for _ in range(num_sites)] for _ in range(num_sites)]
+    # transmission_list = [Transmission_queue() for _ in range(num_sites)]
+
+    #Update transmission cost based on scheduled jobs
+    for i in range(num_sites):
+        for event in transmission_list[i].queue:
+            transmission_cost[event.start_site][i] += event.transit_time
+
+    #Add new jobs' transmissions
+    for i in range(scheduled_length, num_jobs):
+        # Process i-th job in the order
+        unit_transit = job_datasize[job_order[i]] / bandwidth
+        for j in range(num_sites):
+            for k in range(num_sites):
+                allocated = 0
+                while allocated < job_transmission[i - scheduled_length][j][k]:
+                    duration = wait_list[j][job_order[i]].task_duration_queue.popleft()
+                    wait_list[j][job_order[i]].num_waiting_task -= 1
+                    event = Event_Transmission(job_order[i], j, k, transmission_cost[j][k] + current_time,
+                                               unit_transit, duration)
+                    transmission_list[k].add_event(event)
+                    transmission_cost[j][k] += unit_transit
+                    allocated += 1
+    return transmission_list
+
+# def estimate_workload(wait_list, transmission_list, ideal_order, capacity):
+#     num_site = len(wait_list)
+#     cur_workload = [0 for _ in range(num_site)]
+    
+
+#     return cur_workload
+
 
 def compute_threshold(total_job_queue):
     interval_array = []
@@ -358,16 +453,15 @@ def transfer_transit(job_order, job_transmission, wait_list, job_datasize, bandw
         unit_transit = job_datasize[job_order[i]] / bandwidth
         for j in range(num_sites):
             for k in range(num_sites):
-                if j != k:
-                    allocated = 0
-                    while allocated < job_transmission[i][j][k]:
-                        duration = wait_list[j][job_order[i]].task_duration_queue.popleft()
-                        wait_list[j][job_order[i]].num_waiting_task -= 1
-                        event = Event_Transmission(job_order[i], j, k, transmission_cost[j][k] + current_time,
-                                                   unit_transit, duration)
-                        transmission_list[k].add_event(event)
-                        transmission_cost[j][k] += unit_transit
-                        allocated += 1
+                allocated = 0
+                while allocated < job_transmission[i][j][k]:
+                    duration = wait_list[j][job_order[i]].task_duration_queue.popleft()
+                    wait_list[j][job_order[i]].num_waiting_task -= 1
+                    event = Event_Transmission(job_order[i], j, k, transmission_cost[j][k] + current_time,
+                                               unit_transit, duration)
+                    transmission_list[k].add_event(event)
+                    transmission_cost[j][k] += unit_transit
+                    allocated += 1
     return transmission_list
 
 
@@ -397,15 +491,7 @@ def retract_transmission(wait_list, transmission_list):
             wait_list[event.start_site][event.job_index].task_duration_queue.append(event.task_duration)
 
 
-# def write_standard_deviation(SD_stack, data_resource, strategy, num_of_sites, alpha, bandwidth, utility, job_number):
-#     path_name = record_path("StandardDeviation", data_resource, strategy, num_of_sites, alpha, utility, bandwidth)
-#     with open(path_name, 'w', newline='') as csv_file:
-#         writer = csv.writer(csv_file)
-#         average_jrt = 0  # Job Response Time (JRT) sum
-#         while SD_stack:
-#             SD_event = SD_stack.pop()
-#             row = [SD_event.SD, SD_event.enter_time, SD_event.release_time]
-#             writer.writerow(row)
+
 
 
 def write_job_completion_time(finish_list, data_resource, strategy, num_of_sites, alpha, bandwidth, utility,
@@ -488,6 +574,7 @@ def record_demand_2(num_of_sites, wait_list):
             demand = sum(temp_job.task_duration_queue)
             current_demand[i][index] = demand
     return current_demand
+
 
 
 def update_time_and_demand(transmission_queue, wait_list, current_demand, current_bandwidth, current_time):
