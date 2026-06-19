@@ -5,10 +5,9 @@ import random
 import sys, heapq
 import cvxpy as cp
 import numpy as np
-import SWAG_slot
+import Policy_SWAG, Policy_SRPT
 from Event import Transmission_queue, Event_Transmission
-from LP import transfer_transit, SWAG_MIP
-import LP
+
 
 
 def main():
@@ -22,82 +21,6 @@ def main():
     time_cost = 0
     time_cost2 = 0
 
-
-    for test in range(num_test):
-        job_demand = [[random.randint(1, 10) for _ in range(num_of_jobs)] for _ in range(num_of_sites)]
-        job_duration = [random.randint(1, 10) for _ in range(num_of_jobs)]
-        # job_demand = [[70, 15, 26, 76, 61, 72, 82, 52, 86, 34], [73, 11, 77, 54, 99, 38, 15, 6, 8, 7],
-        #               [27, 37, 90, 78, 57, 74, 99, 28, 88, 96], [38, 70, 14, 53, 6, 41, 66, 54, 57, 91],
-        #               [49, 34, 12, 38, 14, 33, 67, 27, 89, 81], [69, 9, 13, 62, 27, 26, 98, 58, 19, 20],
-        #               [2, 70, 67, 24, 12, 45, 88, 99, 37, 47], [30, 15, 40, 24, 39, 76, 29, 66, 68, 10],
-        #               [56, 72, 6, 73, 7, 87, 85, 25, 20, 49], [2, 77, 14, 69, 87, 36, 72, 48, 9, 91]]
-        # job_duration = [49, 94, 80, 49, 5, 25, 20, 79, 40, 53]
-        job_demand = [[61], [99],
-                      [57], [6],
-                      [14], [27],
-                      [12], [39],
-                      [7], [87]]
-        job_duration = [5]
-
-        # job_demand = [[100], [0], [0], [0], [0]]
-        job_demand2 = copy.deepcopy(job_demand)
-
-        # job_duration = [7, 1, 1, 5, 8, 1, 1, 10, 8, 5]
-
-        sum_demand = [sum(job_demand[i][j] * job_duration[j] for i in range(num_of_sites)) for j in range(num_of_jobs)]
-
-        capacity = [num_slot for _ in range(num_of_sites)]
-        transmission_queues = [Transmission_queue() for _ in range(num_of_sites)]
-        transmission_cost = [[0 for _ in range(num_of_sites)] for _ in range(num_of_sites)]
-        print(f"job_demand: {job_demand}")
-        print(f"job_duration: {job_duration}")
-        print(f"job_datasize: {job_datasize}")
-        print(f"sum_demand: {sum_demand}")
-
-        SWAG_info_order = SWAG_slot.SWAG_slot(job_demand, job_duration, capacity)
-        a = compute_JRT(job_demand, job_duration, capacity, SWAG_info_order, transmission_queues)
-        print(f"SWAG_slot: {SWAG_info_order}, {sum(a)}")
-        record[0] += sum(a)
-
-        start_time = time.time()
-        greedy_order, transmission_array = heuristic(job_demand, job_duration, job_datasize, capacity, bandwidth)
-        transmission_list = transfer_transit(greedy_order, transmission_array, job_duration, job_datasize, bandwidth, 0)
-        time_cost += time.time() - start_time
-        c = compute_JRT(job_demand, job_duration, capacity, greedy_order, transmission_list)
-        print(f"Greedy: {greedy_order}, {c}")#{transmission_list},
-
-        for i in range(num_of_sites):
-            print(f"{transmission_array[0][i]}")
-        #     for j in range(num_of_sites):
-        #         job_demand[j][0] += transmission_array[0][i][j]
-
-        # print(job_demand)
-        record[1] += sum(c)
-
-        # diff_sum = sum(abs(a - b) for row_a, row_b in zip(job_demand2, job_demand) for a, b in zip(row_a, row_b))
-        # num_trans = sum(trans.length() for trans in transmission_list)
-        #
-        # if diff_sum == num_trans:
-        #     continue
-        # else:
-        #     print("Find unmatch")
-        #     break
-
-        # transmission_list2 = [Transmission_queue() for _ in range(num_of_sites)]
-        # transmission_cost = [[0 for _ in range(num_of_sites)]for _ in range(num_of_sites)]
-        # start_time = time.time()
-        # LP_order, transmission_array = SWAG_MIP2(job_demand2, job_duration, job_datasize, capacity, bandwidth, False,
-        #                                          "CPLEX")
-        # time_cost2 += time.time() - start_time
-        # transmission_list2 = transfer_transit(LP_order, transmission_array, job_duration, job_datasize, bandwidth, 0)
-        # d = LP.compute_JRT(job_demand2, job_duration, capacity, LP_order, transmission_list2)
-        # print(f"LP: {list(map(int, LP_order))}, {transmission_list2}, {sum(d)}")
-        # record[2] += sum(d)
-
-        # if b < c:
-        #     print('Error!')
-        #     break
-        print()
     print(record)
     print(f"Time cost: {time_cost / num_test}, {time_cost2 / num_test}")
 

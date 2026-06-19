@@ -7,17 +7,18 @@ import heapq
 
 import Policy_SWAG, Policy_SRPT, Policy_Heuristic, Policy_GEODIS, Policy_MinFlow
 from Event import Event, Event_Transmission, Transmission_queue
+from Job import Job, Job_Total
 #use_solver = "HIGHS"
 # num_late = 0
 
 def main():
-    data_resources = ["Ali2018_4"]  # Ali2017:5000 Ali2018_4: 15000
+    data_resources = ["Ali2017"]  # Ali2017:5000 Ali2018_4: 15000
     strategies = ["Flow"]  # "Flow", "SRPT", "SWAG", "heuristic", "GEODIS"
-    alphas = [2.0]
+    alphas = [1.0]
     utilities = [0.6]
-    bandwidths = [150]#3,6,12
-    job_number = 10000
-    start_index = 15000
+    bandwidths = [3]#3,6,12
+    job_number = 1000
+    start_index = 5000
 
     # Define the number of sites and site capacity
     site_capacity = 32
@@ -39,6 +40,8 @@ def main():
                 file_name = f"{data_resource}_distributed_sites={num_of_sites}_alpha={alpha}"
                 workload = compute_workload(file_name, job_number, start_index, capacity, workload_threshold)
                 workload[0] /= utility
+                print(workload)
+
                 # workload_coefficient = workload[0] / utility
                 # average_task_duration = workload[1]
 
@@ -270,22 +273,19 @@ def compute_order(strategy, total_wait_list, wait_list, capacity, bandwidth, tra
         return Policy_SRPT.SRPT(current_demand, current_duration, capacity), transmission_list
     elif strategy == "Flow":
         # retract_transmission(wait_list, transmission_list)
-        LP_order, job_transit = Policy_MinFlow.SWAG_MIP(current_demand, current_duration, current_datasize, capacity, bandwidth,
-                                            False)
+        LP_order, job_transit = Policy_MinFlow.max_flow_ortools(current_demand, current_duration, current_datasize, capacity, bandwidth)
         # print(LP_order, job_transit)
         transmission_list = transfer_transit(LP_order, job_transit, wait_list, current_datasize, bandwidth,
                                              current_time)
         return LP_order, transmission_list
     elif strategy == "heuristic":
-        greedy_order, job_transit = Heuristic.heuristic(current_demand, current_duration, current_datasize, capacity, bandwidth)
+        greedy_order, job_transit = Policy_Heuristic.heuristic(current_demand, current_duration, current_datasize, capacity, bandwidth)
         transmission_list = transfer_transit(greedy_order, job_transit, wait_list, current_datasize, bandwidth,
                                              current_time)
         return greedy_order, transmission_list
 
     elif strategy == "GEODIS":
-        GEO_order, job_transit = GEODIS.GEODIS(current_demand, current_duration, current_datasize,
-                                                                     capacity,
-                                                                     bandwidth)
+        GEO_order, job_transit = Policy_GEODIS.GEODIS(current_demand, current_duration, current_datasize, capacity, bandwidth)
         transmission_list = transfer_transit(GEO_order, job_transit, wait_list, current_datasize, bandwidth,
                                              current_time)
         return GEO_order, transmission_list

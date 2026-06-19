@@ -4,8 +4,7 @@ import sys
 import bisect
 
 from Event import Event, Event_Transmission, Transmission_queue
-from SWAG import SWAG
-from SWAG_slot import SWAG_slot
+from Policy_SWAG import SWAG_slot
 from ortools.graph.python import min_cost_flow
 # Based on prof's idea, limitation on transmission bandwidth is simplified
 # num_late = 0
@@ -25,21 +24,8 @@ def main():
 
     for i in range(num_round):
         print(f"Round {i}")
-        # job_demand = [[8, 5, 1, 3, 5, 1, 2, 7, 1, 7], [4, 1, 2, 5, 8, 6, 8, 9, 7, 5], [6, 8, 10, 9, 3, 4, 2, 6, 1, 8],
-        #               [5, 8, 7, 10, 5, 4, 1, 10, 7, 4], [9, 4, 3, 9, 9, 7, 8, 1, 10, 2], [1, 5, 3, 6, 10, 7, 7, 10, 1, 1],
-        #               [2, 1, 2, 8, 2, 8, 5, 10, 6, 3], [10, 1, 8, 2, 6, 8, 5, 5, 4, 3], [9, 1, 3, 1, 4, 7, 6, 10, 8, 10],
-        #               [7, 4, 9, 3, 10, 5, 6, 1, 10, 2]]
-        # job_duration = [1, 1, 5, 4, 4, 1, 5, 2, 3, 2]
         job_demand = [[random.randint(1, 10) for _ in range(num_jobs)] for _ in range(num_sites)]
         job_duration = [random.randint(1, 10) for _ in range(num_jobs)]
-        # job_demand = [[2, 5, 8], [10, 1, 6], [9, 10, 2]]
-        # job_duration = [2, 2, 7]
-        # job_demand = [[61], [99],
-        #               [57], [6],
-        #               [14], [27],
-        #               [12], [39],
-        #               [7], [87]]
-        # job_duration = [5]
 
         job_demand2 = copy.deepcopy(job_demand)
         job_demand3 = copy.deepcopy(job_demand)
@@ -53,7 +39,7 @@ def main():
 
         transmission_list = [Transmission_queue() for _ in range(num_sites)]
 
-        SWAG_order = SWAG(job_demand)
+        SWAG_order = SWAG_slot(job_demand)
         SWAG_JRT = compute_JRT(job_demand, job_duration, capacity, SWAG_order, transmission_list)
         print(f"SWAG: {SWAG_order}, JRT={SWAG_JRT}, sum={sum(SWAG_JRT)}")
         a[0] += sum(SWAG_JRT)
@@ -63,85 +49,6 @@ def main():
         print(f"SWAG_slot: {SWAG_slot_order}, JRT={SWAG_slot_JRT}, sum={sum(SWAG_slot_JRT)}")
         a[1] += sum(SWAG_slot_JRT)
 
-        # start_time = time.time()
-        # LP_order, job_transmission = LP.SWAG_MIP(job_demand, job_duration, job_datasize, capacity, bandwidth, False, "CPLEX")
-        # this_cost = time.time() - start_time
-        # time_cost[0] += this_cost
-        # # print(job_transmission)
-        # transmission_list = transfer_transit(LP_order, job_transmission, job_duration, job_datasize, bandwidth)
-        # num_transit = sum(transmission_list[i].length() for i in range(num_sites))
-        # # print(transmission_list)
-        # LP_JRT = compute_JRT(job_demand, job_duration, capacity, LP_order, transmission_list)
-        # print(f"CLPEX_LP: {list(map(int, LP_order))}, JRT={LP_JRT}, sum={sum(LP_JRT)}, time cost={this_cost}, transfers={num_transit}")
-        # a[2] += sum(LP_JRT)
-
-        # start_time = time.time()
-        # LP2_order, job_transmission2 = SWAG_MIP(job_demand2, job_duration, job_datasize, capacity, bandwidth, False, "CPLEX")
-        # this_cost = time.time() - start_time
-        # time_cost[1] += this_cost
-        # # print(job_transmission2)
-        # transmission_list2 = transfer_transit(LP2_order, job_transmission2, job_duration, job_datasize, bandwidth)
-        # num_transit = sum(transmission_list2[i].length() for i in range(num_sites))
-        # LP2_JRT = compute_JRT(job_demand2, job_duration, capacity, LP2_order, transmission_list2)
-        # print(f"CPLEX_LP2: {list(map(int, LP2_order))}, JRT={LP2_JRT}, sum={sum(LP2_JRT)}, time cost={this_cost}, transfers={num_transit}")
-        # # print(f"{sum(Greedy.compute_JRT(job_demand2, job_duration, capacity, LP_order, transmission_list2))}")
-        # a[3] += sum(LP2_JRT)
-
-        # solver2 = "HIGHS"
-        slot_workload = [[0] * i for i in capacity]
-        start_time = time.time()
-        MIP_order, job_transmission3, num_late = max_flow_ortools(job_demand3, job_duration, job_datasize, capacity, bandwidth)
-        this_cost = time.time() - start_time
-        time_cost[2] += this_cost
-        # print(job_transmission)
-        transmission_list3 = transfer_transit(MIP_order, job_transmission3, job_duration, job_datasize, bandwidth)
-        num_transit = sum(transmission_list3[i].length() for i in range(num_sites))
-        # print(transmission_list)
-        MIP_JRT = compute_JRT(job_demand3, job_duration, capacity, MIP_order, transmission_list3)
-        print(
-            f"Max_flow: {list(map(int, MIP_order))}, JRT={MIP_JRT}, sum={sum(MIP_JRT)}, time cost={this_cost}, transfers={num_transit}")
-        a[4] += sum(MIP_JRT)
-        num_trans[4] += num_transit
-        #
-
-        # solver3 = "Cplex"
-        # start_time = time.time()
-        # LP_order, job_transmission4 = LP2_optimize.SWAG_MIP(job_demand4, job_duration, job_datasize, capacity, bandwidth, "CPLEX")
-        # this_cost = time.time() - start_time
-        # time_cost[3] += this_cost
-        # # print(job_transmission2)
-        # transmission_list4 = transfer_transit(LP_order, job_transmission4, job_duration, job_datasize, bandwidth)
-        # num_transit = sum(transmission_list4[i].length() for i in range(num_sites))
-        # LP_JRT = compute_JRT(job_demand4, job_duration, capacity, LP_order, transmission_list4)
-        # print(f"{solver3}_LP: {list(map(int, LP_order))}, JRT={LP_JRT}, sum={sum(LP_JRT)}, time cost={this_cost}, transfers={num_transit}")
-        # a[5] += sum(LP_JRT)
-        # num_trans[5] += num_transit
-
-        # start_time = time.time()
-        # MIP_order, job_transmission5 = SWAG_MIP(job_demand5, job_duration, job_datasize, capacity, bandwidth, True,
-        #                                         "GUROBI")
-        # this_cost = time.time() - start_time
-        # time_cost[4] += this_cost
-        # # print(job_transmission)
-        # transmission_list5 = transfer_transit(MIP_order, job_transmission5, job_duration, job_datasize, bandwidth)
-        # num_transit = sum(transmission_list3[i].length() for i in range(num_sites))
-        # # print(transmission_list)
-        # MIP_JRT = compute_JRT(job_demand5, job_duration, capacity, MIP_order, transmission_list5)
-        # print(
-        #     f"GUROBI_MIP: {MIP_order}, JRT={MIP_JRT}, sum={sum(MIP_JRT)}, time cost={this_cost}, transfers={num_transit}")
-        # a[6] += sum(MIP_JRT)
-        #
-        # start_time = time.time()
-        # LP_order, job_transmission6 = SWAG_MIP(job_demand6, job_duration, job_datasize, capacity, bandwidth, False,
-        #                                        "GUROBI")
-        # this_cost = time.time() - start_time
-        # time_cost[5] += this_cost
-        # # print(job_transmission2)
-        # transmission_list6 = transfer_transit(LP_order, job_transmission6, job_duration, job_datasize, bandwidth)
-        # num_transit = sum(transmission_list6[i].length() for i in range(num_sites))
-        # LP_JRT = compute_JRT(job_demand6, job_duration, capacity, LP_order, transmission_list6)
-        # print(f"SCIP_LP: {LP_order}, JRT={LP_JRT}, sum={sum(LP_JRT)}, time cost={this_cost}, transfers={num_transit}")
-        # a[7] += sum(LP_JRT)
 
     print(a)
     print(num_trans)
@@ -401,7 +308,7 @@ def max_flow_ortools(job_demand, job_duration, job_datasize, capacity, bandwidth
     #     # print(sum_demand)
     #     print(sum(computation_record))
     # print(f"late arrival {num_late}")
-    return max_flow_order, job_transmission, 0
+    return max_flow_order, job_transmission
 
 def late_arrival(job_demand, job_duration, unit_trans_time, transmission_cost, slot_workload, job_index, current_transmission):
     # Check whether there are late arrivals in the current job.
