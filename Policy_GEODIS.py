@@ -19,7 +19,6 @@ def main():
     print("a")
 
 
-        
 
 def GEODIS(job_demand, job_duration, job_datasize, capacity, bandwidth):
     # Assign tasks at the same site first

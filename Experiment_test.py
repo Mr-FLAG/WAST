@@ -12,13 +12,13 @@ from Job import Job, Job_Total
 # num_late = 0
 
 def main():
-    data_resources = ["Ali2017"]  # Ali2017:5000 Ali2018_4: 15000
-    strategies = ["Flow"]  # "Flow", "SRPT", "SWAG", "heuristic", "GEODIS"
+    data_resources = ["Ali2018_4"]  # Ali2017:5000 Ali2018_4: 15000
+    strategies = ["heuristic"]  # "Flow", "SRPT", "SWAG", "heuristic", "GEODIS"
     alphas = [1.0]
     utilities = [0.6]
     bandwidths = [3]#3,6,12
     job_number = 1000
-    start_index = 5000
+    start_index = 15000
 
     # Define the number of sites and site capacity
     site_capacity = 32
