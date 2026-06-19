@@ -13,7 +13,7 @@ from Event import Event, Event_Transmission, Transmission_queue
 
 def main():
     data_resources = ["Ali2018_4"]  # Ali2017:5000 Ali2018_4: 15000
-    strategies = ["FLOW"]  #"SRPT", "SWAG", "heuristic", "GEODIS", "FLOW"
+    strategies = ["FLOW"]  #"SRPT", "SWAG", "heuristic", "FLOW"
     alphas = [1.0] #0.0, 0.5, 1.0, 2.0
     utilities = [0.6] #0.5, 0.6, 0.7, 0.8
     bandwidths = [3]#3, 6, 12

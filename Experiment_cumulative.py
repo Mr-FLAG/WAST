@@ -5,8 +5,7 @@ import numpy as np
 from collections import deque
 import heapq
 
-import SWAG_slot, Heuristic, LP,  LP_SWAG, LP_flowtest2, LP_flow_improve, LP_flowtest, SRPT, LP_flow, LP_flow_t
-import GEODIS, LP_flow_simp, LP_flow_simp_2
+import Policy_GEODIS
 from Job import Job, Job_Total
 from Event import Event, Event_Transmission, Transmission_queue
 #use_solver = "HIGHS"
@@ -14,7 +13,7 @@ from Event import Event, Event_Transmission, Transmission_queue
 
 def main():
     data_resources = ["Ali2018_4"]  # Ali2017:5000 Ali2018_4: 15000
-    strategies = ["GEODIS"]  # "LP_flow", "LP_simp","LP_simp2", "SRPT", "SWAG", "heuristic", "GEODIS"
+    strategies = ["GEODIS"]  # "GEODIS"
     alphas = [1.0]
     utilities = [0.6]
     bandwidths = [6]#3,6,12
@@ -375,7 +374,7 @@ def update_order(strategy, total_wait_list, wait_list, ideal_order, capacity, ba
     
     # print(current_demand)
     if strategy == "GEODIS":
-        GEO_order, job_transit = GEODIS.GEODIS_cumu(cur_workload, ideal_order, cur_demand, cur_duration, cur_datasize,
+        GEO_order, job_transit = Policy_GEODIS.GEODIS_cumu(cur_workload, ideal_order, cur_demand, cur_duration, cur_datasize,
                                                                      capacity,
                                                                      bandwidth)
         # print(f"Order updated: {GEO_order}")
